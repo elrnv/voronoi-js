@@ -5,8 +5,29 @@
         <link rel='stylesheet' type='text/css' href='style.css'/>
     </head>
     <body>
-        <script type="x-shader/x-vertex" id="coneVert" src="cone.vert"></script>
-        <script type="x-shader/x-fragment" id="coneFrag" src="cone.frag"></script>
+      <script type="x-shader/x-vertex" id="coneVert">
+        // switch on high precision floats
+        #ifdef GL_ES
+        precision highp float;
+        #endif
+
+        void main()
+        {
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }
+      </script>
+      <script type="x-shader/x-fragment" id="coneFrag">
+        #ifdef GL_ES
+        precision highp float;
+        #endif
+
+        uniform vec3 color;
+
+        void main()
+        {
+          gl_FragColor  = vec4(color,1.0);
+        }
+      </script>
         <script src="three.min.js"></script>
         <script src="OrbitControls.js"></script>
         <script type='text/javascript' src='script.js'></script>
