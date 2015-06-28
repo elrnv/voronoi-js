@@ -3,6 +3,7 @@ var win_width, win_height;
 var rtt_target;
 var rtt_width, rtt_height;
 var controls;
+var uniforms;
 
 var num_regions = 50;
 // centroids of each voronoi region
@@ -64,11 +65,29 @@ function init_geometry() {
   // initialize voronoi region arrays
   reset_centroids();
 
+  var uniforms = {
+    color: { type: "v3", value: new THREE.Vector3(1.0, 0.0, 1.0) },
+  };
+    
+  var material1 = new THREE.ShaderMaterial( {
+      uniforms: uniforms,
+      vertexShader: document.getElementById( 'coneVert' ).textContent,
+      fragmentShader: document.getElementById( 'coneFrag' ).textContent
+  } );
+
+    //uniforms.color.value.z = 1.0;
+    //uniforms.color.value.y = 0.0;
+    //uniforms.color.value.x = 1.0;
   // generate geometry to display
-  for (var i = 0; i < num_regions; ++i) {
-    var geometry = new THREE.CylinderGeometry( 0, 200, 100, 16, 1, true );
-    var material = new THREE.MeshBasicMaterial( { color: i} );
-    region_mesh[i] = new THREE.Mesh( geometry, material );
+  var geometry = new THREE.CylinderGeometry( 0, 200, 100, 16, 1, true );
+  for ( var i = 0; i < num_regions; ++i ) {
+    var material = new THREE.MeshBasicMaterial( {color: i} );
+    //uniforms.color.value.z = (i % 256) / 256.0;
+    //uniforms.color.value.y = ((i / 256) % 256) / 256.0;
+    //uniforms.color.value.x = ((i / 65536) % 256) / 256.0;
+    //var line = uniforms.color.x + " " + uniforms.color.y + " " +uniforms.color.z;
+    console.log(i);
+    region_mesh[i] = new THREE.Mesh( geometry, material1 );
     region_mesh[i].position.x += win_width*(Math.random() - 0.5);
     region_mesh[i].position.y += win_height*(Math.random() - 0.5);
     region_mesh[i].rotation.x += Math.PI/2;
@@ -77,10 +96,10 @@ function init_geometry() {
 }
 
 function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    render();
-    render_to_target();
+  //requestAnimationFrame(animate);
+  controls.update();
+  render();
+  render_to_target();
 }
 
 function render_to_target() {
@@ -108,8 +127,8 @@ function render_to_target() {
   }
 
   for (var i = 0; i < num_regions; ++i) {
-    region_mesh[i].position.x = centroids[2*i] - rtt_width/2;
-    region_mesh[i].position.y = centroids[2*i+1] - rtt_height/2;
+    region_mesh[i].position.x = centroids[2*i] - 0.5*rtt_width + 0.5;
+    region_mesh[i].position.y = centroids[2*i+1] - 0.5*rtt_height + 0.5;
   }
 
   reset_centroids();
