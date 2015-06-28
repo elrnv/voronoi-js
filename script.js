@@ -13,9 +13,61 @@ var region_pixels = new Uint16Array(num_regions);
 // cones geometry representing voronoi regions
 var region_mesh = new Array(num_regions);
 
-init();
-init_geometry();
-animate();
+var vertexShader;
+var fragShader;
+
+loadFiles(['cone.vert', 'cone.frag'], function (shaderText) {
+    vertexShader = shaderText[0];
+    fragShader = shaderText[1];
+
+    init();
+    init_geometry();
+    animate();
+}, function (url) {
+    alert('Failed to download "' + url + '"');
+});
+
+
+function loadFile(url, data, callback, errorCallback) {
+    // Set up an asynchronous request
+    var request = new XMLHttpRequest();
+    request.open('GET', url, true);
+
+    // Hook the event that gets called as the request progresses
+    request.onreadystatechange = function () {
+        // If the request is "DONE" (completed or failed)
+        if (request.readyState == 4) {
+            // If we got HTTP status 200 (OK)
+            if (request.status == 200) {
+                callback(request.responseText, data)
+            } else { // Failed
+                errorCallback(url);
+            }
+        }
+    };
+
+    request.send(null);
+}
+
+function loadFiles(urls, callback, errorCallback) {
+    var numUrls = urls.length;
+    var numComplete = 0;
+    var result = [];
+
+    // Callback for a single file
+    function partialCallback(text, urlIndex) {
+        result[urlIndex] = text;
+        numComplete++;
+
+        if (numComplete == numUrls) {
+            callback(result);
+        }
+    }
+
+    for (var i = 0; i < numUrls; i++) {
+        loadFile(urls[i], i, partialCallback, errorCallback);
+    }
+}
 
 function init() {
 
@@ -30,7 +82,7 @@ function init() {
         far = 100000;
 
 //    camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera = new THREE.OrthographicCamera(win_width / -2, win_width / 2, 
+    camera = new THREE.OrthographicCamera(win_width / -2, win_width / 2,
                                           win_height / 2, win_height / -2,
                                           near, far);
     //camera = new THREE.CombinedCamera(win_width, win_height, fov, near, far, near, far);
@@ -68,11 +120,11 @@ function init_geometry() {
   var uniforms = {
     color: { type: "v3", value: new THREE.Vector3(1.0, 0.0, 1.0) },
   };
-    
+
   var material1 = new THREE.ShaderMaterial( {
       uniforms: uniforms,
-      vertexShader: document.getElementById( 'coneVert' ).textContent,
-      fragmentShader: document.getElementById( 'coneFrag' ).textContent
+      vertexShader: vertexShader,
+      fragmentShader: fragShader
   } );
 
     //uniforms.color.value.z = 1.0;
