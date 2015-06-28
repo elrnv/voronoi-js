@@ -65,29 +65,27 @@ function init_geometry() {
   // initialize voronoi region arrays
   reset_centroids();
 
-  var uniforms = {
-    color: { type: "v3", value: new THREE.Vector3(1.0, 0.0, 1.0) },
+  var attributes = {
+    color: { type: "v3", value: new Array(num_regions) },
   };
     
-  var material1 = new THREE.ShaderMaterial( {
-      uniforms: uniforms,
+  var material = new THREE.ShaderMaterial( {
+      attributes: attributes,
       vertexShader: document.getElementById( 'coneVert' ).textContent,
       fragmentShader: document.getElementById( 'coneFrag' ).textContent
   } );
 
-    //uniforms.color.value.z = 1.0;
-    //uniforms.color.value.y = 0.0;
-    //uniforms.color.value.x = 1.0;
   // generate geometry to display
   var geometry = new THREE.CylinderGeometry( 0, 200, 100, 16, 1, true );
   for ( var i = 0; i < num_regions; ++i ) {
-    var material = new THREE.MeshBasicMaterial( {color: i} );
-    //uniforms.color.value.z = (i % 256) / 256.0;
-    //uniforms.color.value.y = ((i / 256) % 256) / 256.0;
-    //uniforms.color.value.x = ((i / 65536) % 256) / 256.0;
+    //var material = new THREE.MeshBasicMaterial( {color: i} );
+    attributes.color.value[i] = new THREE.Vector3(
+    ((i / 65536) % 256) / 256.0,
+    ((i / 256) % 256) / 256.0,
+        (i % 256) / 256.0);
     //var line = uniforms.color.x + " " + uniforms.color.y + " " +uniforms.color.z;
     console.log(i);
-    region_mesh[i] = new THREE.Mesh( geometry, material1 );
+    region_mesh[i] = new THREE.Mesh( geometry, material );
     region_mesh[i].position.x += win_width*(Math.random() - 0.5);
     region_mesh[i].position.y += win_height*(Math.random() - 0.5);
     region_mesh[i].rotation.x += Math.PI/2;
