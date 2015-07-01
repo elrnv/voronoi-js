@@ -1,3 +1,4 @@
+var container, img;
 var camera, scene, renderer;
 var win_width, win_height;
 var rtt_target;
@@ -5,7 +6,7 @@ var rtt_width, rtt_height;
 var controls;
 var uniforms;
 
-var num_regions = 50;
+var num_regions = 100;
 // centroids of each voronoi region
 var centroids = new Float32Array(num_regions*2);
 // number of pixels in a voronoi region
@@ -13,16 +14,30 @@ var region_pixels = new Uint16Array(num_regions);
 // cones geometry representing voronoi regions
 var region_mesh = new Array(num_regions);
 
-init();
-init_geometry();
-animate();
+var frames_to_render = 100;
+
+$(function() {
+  img = new Image();
+  img.onload = function() {
+    init();
+    init_geometry();
+    animate();
+  };
+  img.src = 'static/bg.jpg';
+});
 
 function init() {
+    container = $( '#banner' );
 
     win_width = window.innerWidth;
     win_height = window.innerHeight;
     rtt_width = win_width;
     rtt_height = win_height;
+    container.width = win_width;
+    container.height = win_height;
+
+    var img_data = getImageData(win_width, win_height);
+    console.log(getPixel(img_data, 10, 10));
 
     var fov = 40,
         aspect = win_width / win_height,
@@ -50,7 +65,7 @@ function init() {
     //renderer.setClearColor( 0xffff00 );
     renderer.setSize(win_width, win_height);
 
-    document.body.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
 }
 
 function reset_centroids() {
@@ -65,26 +80,19 @@ function init_geometry() {
   // initialize voronoi region arrays
   reset_centroids();
 
-  var attributes = {
-    color: { type: "v3", value: new Array(num_regions) },
-  };
-    
-  var material = new THREE.ShaderMaterial( {
-      attributes: attributes,
-      vertexShader: document.getElementById( 'coneVert' ).textContent,
-      fragmentShader: document.getElementById( 'coneFrag' ).textContent
-  } );
-
   // generate geometry to display
   var geometry = new THREE.CylinderGeometry( 0, 200, 100, 16, 1, true );
+
+  //var material = new THREE.ShaderMaterial( {
+  //    vertexShader: document.getElementById( 'coneVert' ).textContent,
+  //    fragmentShader: document.getElementById( 'coneFrag' ).textContent
+  //} );
+
+  //material.vertexColor = THREE.VertexColors;
+  //material.attributes.vColor.needsUpdate = true;
+
   for ( var i = 0; i < num_regions; ++i ) {
-    //var material = new THREE.MeshBasicMaterial( {color: i} );
-    attributes.color.value[i] = new THREE.Vector3(
-    ((i / 65536) % 256) / 256.0,
-    ((i / 256) % 256) / 256.0,
-        (i % 256) / 256.0);
-    //var line = uniforms.color.x + " " + uniforms.color.y + " " +uniforms.color.z;
-    console.log(i);
+    var material = new THREE.MeshBasicMaterial( {color: i} );
     region_mesh[i] = new THREE.Mesh( geometry, material );
     region_mesh[i].position.x += win_width*(Math.random() - 0.5);
     region_mesh[i].position.y += win_height*(Math.random() - 0.5);
@@ -94,7 +102,11 @@ function init_geometry() {
 }
 
 function animate() {
-  //requestAnimationFrame(animate);
+  if (frames_to_render > 0)
+  {
+    requestAnimationFrame(animate);
+    frames_to_render -= 1;
+  }
   controls.update();
   render();
   render_to_target();
@@ -134,4 +146,22 @@ function render_to_target() {
 
 function render() {
   renderer.render( scene, camera );
+}
+
+function getImageData(width, height) {
+    var canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    var context = canvas.getContext('2d');
+    context.drawImage(img, 0, 0);
+    return context.getImageData(0, 0, width, height);
+}
+
+function getPixel( imagedata, x, y ) {
+  var position = ( x + imagedata.width * y ) * 4,
+      data     = imagedata.data;
+  return { r: data[ position ], 
+           g: data[ position + 1 ],
+           b: data[ position + 2 ],
+           a: data[ position + 3 ] };
 }

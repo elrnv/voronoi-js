@@ -5,12 +5,13 @@
         <link rel='stylesheet' type='text/css' href='style.css'/>
     </head>
     <body>
+      <script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
       <script type="x-shader/x-vertex" id="coneVert">
         // switch on high precision floats
         #ifdef GL_ES
         precision highp float;
         #endif
-        attribute vec3 color;
+
         varying vec3 frag_color;
 
         void main()
@@ -34,5 +35,6 @@
         <script src="three.min.js"></script>
         <script src="OrbitControls.js"></script>
         <script type='text/javascript' src='script.js'></script>
+        <div id="banner"><!--<img src="bg.jpg">--></div>
     </body>
 </html>
