@@ -45,7 +45,7 @@ function init() {
         far = 100000;
 
 //    camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera = new THREE.OrthographicCamera(win_width / -2, win_width / 2, 
+    camera = new THREE.OrthographicCamera(win_width / -2, win_width / 2,
                                           win_height / 2, win_height / -2,
                                           near, far);
     //camera = new THREE.CombinedCamera(win_width, win_height, fov, near, far, near, far);
