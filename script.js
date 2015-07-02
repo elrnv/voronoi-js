@@ -7,7 +7,7 @@ var width, height;
 var rtt_target;
 var width, height;
 //var controls;
-var num_regions = 2000;
+var num_regions = 1000;
 var paint_colors = new Float32Array(num_regions*3);
 var materials = new Array(num_regions);
 var img_data, grad_img_data;
@@ -24,7 +24,9 @@ var px2idx;
 var pixel_weights;
 var pixel_weight_sums;
 
-var frames_to_render = -1;//1000;
+var frames_to_render;
+
+var MAX_FRAMES = 500;
 
 function loadImage(src) {
   // Prevent any non-image file type from being read.
@@ -48,6 +50,18 @@ $(function() {
     loadImage(e.dataTransfer.files[0]);
   }, true);
   while (target.firstChild) { target.removeChild(target.firstChild); }
+  renderFile("/static/img/bg.jpg");
+});
+
+$( window ).resize(function() {
+  var temp = frames_to_render;
+  frames_to_render = 0;
+  var target = document.getElementById('webgl-container');
+  while (target.firstChild) { target.removeChild(target.firstChild); }
+  init();
+  init_geometry();
+  frames_to_render = temp;
+  animate();
 });
 
 function renderFile(src) {
@@ -61,12 +75,11 @@ function renderFile(src) {
 }
 
 function init() {
+    frames_to_render = MAX_FRAMES;
     container = document.getElementById('webgl-container');
 
-    width = Math.min(window.innerWidth, img.width);
-    height = Math.min(window.innerHeight, img.height);
-    container.width = width;
-    container.height = height;
+    width = container.offsetWidth;
+    height = container.offsetHeight;
 
     rtt_pixels = new Uint8Array(width*height*4);
     px2idx = new Uint16Array(width*height*4);
@@ -79,7 +92,7 @@ function init() {
 
     grad_img_data = context.createImageData(img_data);
     computeGradient( img_data.data, grad_img_data.data, width, height );
-    gaussBlur(grad_img_data.data, grad_img_data.data, width, height, 10 );
+    gaussBlur(grad_img_data.data, grad_img_data.data, width, height, 5 );
     normalize(grad_img_data.data, width, height);
     context.putImageData( grad_img_data, 0, 0 );
 
@@ -110,13 +123,10 @@ function init() {
     renderer.setSize(width, height);
 
     renderer.domElement.style.position = "absolute";
-    renderer.domElement.style.top = "0px";
-    renderer.domElement.style.left = "0px";
-    renderer.domElement.style.bottom = "0px";
-    renderer.domElement.style.right = "0px";
-    renderer.domElement.style.margin = "0px";
-    renderer.domElement.style.background-color= "#000000";
-    renderer.domElement.style.z-index = "-1";
+    renderer.domElement.style.top = "50%";
+    renderer.domElement.style.left = "50%";
+    renderer.domElement.style.transform = "translate(-50%, -50%)";
+    renderer.domElement.style.zIndex = "-1";
     container.appendChild(renderer.domElement);
     //container.appendChild(canvas);
 }
@@ -179,11 +189,13 @@ function render_to_target() {
       for ( var k = 0; k < 3; ++k ) { // ignore opacity
         px2idx[x + width * y] += Math.pow(256,(2-k)) * rtt_pixels[k + 4 * (x + width * y)];
       }
-      var weight = 0;
-      for ( var k = 0; k < 3; ++k ) {
-        weight += grad_img_data.data[k + 4 * (x + width * (height - y - 1))];
+      if ( grad_img_data ) {
+        var weight = 0;
+        for ( var k = 0; k < 3; ++k ) {
+          weight += grad_img_data.data[k + 4 * (x + width * (height - y - 1))];
+        }
+        pixel_weights[x + width * y] = weight;
       }
-      pixel_weights[x + width * y] = weight;
     }
   }
 
@@ -194,12 +206,14 @@ function render_to_target() {
     }
   }
 
-  for ( var i = 0; i < num_regions; ++i ) {
-    pixel_weight_sums[i] = 0;
-  }
-  for ( var y = 0; y < height; ++y ) {
-    for ( var x = 0; x < width; ++x ) {
-      pixel_weight_sums[px2idx[x+width*y]] += pixel_weights[x + width * y];
+  if ( grad_img_data ) {
+    for ( var i = 0; i < num_regions; ++i ) {
+      pixel_weight_sums[i] = 0;
+    }
+    for ( var y = 0; y < height; ++y ) {
+      for ( var x = 0; x < width; ++x ) {
+        pixel_weight_sums[px2idx[x+width*y]] += pixel_weights[x + width * y];
+      }
     }
   }
 
@@ -209,14 +223,25 @@ function render_to_target() {
       paint_colors[3*index] += img_data.data[4 * (x + width * (height - y - 1))];
       paint_colors[1 + 3*index] += img_data.data[1 + 4 * (x + width * (height - y - 1))];
       paint_colors[2 + 3*index] += img_data.data[2 + 4 * (x + width * (height - y - 1))];
-      centroids[2*index] += x*pixel_weights[x + width*y];
-      centroids[2*index+1] += y*pixel_weights[x + width*y];
+      var weight = 1;
+      if (grad_img_data) {
+       weight = pixel_weights[x + width*y];
+      }
+      centroids[2*index] += x*weight;
+      centroids[2*index+1] += y*weight;
     }
   }
 
   for (var i = 0; i < num_regions; ++i) {
-    centroids[2*i] /= pixel_weight_sums[i];
-    centroids[2*i+1] /= pixel_weight_sums[i];
+    if ( grad_img_data ) {
+      centroids[2*i] /= pixel_weight_sums[i];
+      centroids[2*i+1] /= pixel_weight_sums[i];
+    }
+    else {
+      centroids[2*i] /= region_pixels[i];
+      centroids[2*i+1] /= region_pixels[i];
+    }
+
     paint_colors[3*i] /= 255*region_pixels[i];
     paint_colors[3*i + 1] /= 255*region_pixels[i];
     paint_colors[3*i + 2] /= 255*region_pixels[i];
@@ -260,7 +285,12 @@ function createImageCanvas(width, height) {
     canvas.width = width;
     canvas.height = height;
     var context = canvas.getContext('2d');
-    context.drawImage(img, 0, 0);
+
+    var hRatio = canvas.width / img.width;
+    var vRatio = canvas.height / img.height;
+    var ratio  = Math.max( hRatio, vRatio );
+    context.drawImage(img,0,0,img.width,img.height, 
+                    (width - img.width*ratio)/2, (height-img.height*ratio)/2,img.width*ratio, img.height*ratio);
     return canvas;
 }
 
