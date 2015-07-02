@@ -22,11 +22,45 @@ var region_mesh = new Array(num_regions);
 var rtt_pixels;
 var px2idx;
 var pixel_weights;
-var pixel_weight_sums;
+var pixel_weight_sums = new Float32Array(num_regions);
 
 var frames_to_render;
 
 var MAX_FRAMES = 500;
+
+// Main point of entry
+if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
+  $(function() {
+    // allocate needed arrays
+
+    init();
+    init_geometry();
+
+    var target = document.getElementById('webgl-container');
+    target.addEventListener("dragover", function(e){e.preventDefault();}, true);
+    target.addEventListener("drop", function(e){
+      e.preventDefault();
+      loadImage(e.dataTransfer.files[0]);
+    }, true);
+    while (target.firstChild) { target.removeChild(target.firstChild); }
+    renderFile("/static/img/bg.jpg", true);
+  });
+}
+
+$( window ).resize(function() {
+  var temp = frames_to_render;
+  frames_to_render = 0;
+
+  var target = document.getElementById('webgl-container');
+  while (target.firstChild) { target.removeChild(target.firstChild); }
+  if ( img ) {
+    reset();
+    reset_geometry();
+    reset_image_data();
+  }
+
+  frames_to_render = temp;
+});
 
 function loadImage(src) {
   // Prevent any non-image file type from being read.
@@ -37,105 +71,90 @@ function loadImage(src) {
   // Create our FileReader and run the results through the renderer
   var reader = new FileReader();
   reader.onload = function(e) {
-    renderFile(e.target.result);
+    renderFile(e.target.result, false);
   };
   reader.readAsDataURL(src);
 }
 
-if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
-  $(function() {
-    var target = document.getElementById('webgl-container');
-    target.addEventListener("dragover", function(e){e.preventDefault();}, true);
-    target.addEventListener("drop", function(e){
-      e.preventDefault();
-      loadImage(e.dataTransfer.files[0]);
-    }, true);
-    while (target.firstChild) { target.removeChild(target.firstChild); }
-    renderFile("/static/img/bg.jpg");
-  });
-}
-
-$( window ).resize(function() {
-  var temp = frames_to_render;
-  frames_to_render = 0;
-  var target = document.getElementById('webgl-container');
-  while (target.firstChild) { target.removeChild(target.firstChild); }
-  if ( img ) {
-    init();
-    init_geometry();
-  }
-
-  frames_to_render = temp;
-
-  if ( img ) { animate(); }
-});
-
-function renderFile(src) {
+function renderFile(src, do_animate) {
   img = new Image();
   img.onload = function() {
-    init();
-    init_geometry();
-    animate();
+    reset();
+    reset_image_data();
+    if (do_animate) animate();
   };
   img.src = src;
 }
 
 function init() {
+  container = document.getElementById('webgl-container');
+  width = container.offsetWidth;
+  height = container.offsetHeight;
+
+  rtt_pixels = new Uint8Array(width*height*4);
+  px2idx = new Array(width*height*4);
+  pixel_weights = new Array(width*height);
+
+  var near = 0.1, far = 100000;
+  camera = new THREE.OrthographicCamera(
+      width / -2, width / 2,
+      height / 2, height / -2,
+      near, far);
+  camera.position.z = 1000;
+
+  scene = new THREE.Scene();
+  rtt_target = new THREE.WebGLRenderTarget();
+  rtt_target.magFilter = THREE.NearestFilter;
+  rtt_target.minFilter = THREE.NearestFilter;
+  renderer = new THREE.WebGLRenderer( { antialias: true } );
+  renderer.setClearColor( 0, 0 );
+}
+
+function reset() {
     frames_to_render = MAX_FRAMES;
-    container = document.getElementById('webgl-container');
 
     width = container.offsetWidth;
     height = container.offsetHeight;
 
-    rtt_pixels = new Uint8Array(width*height*4);
-    px2idx = new Uint16Array(width*height*4);
-    pixel_weights = new Float32Array(width*height);
-    pixel_weight_sums = new Float32Array(num_regions);
+    // if size has changed, we need to reallocate our arrays
+    if ( width*height*4 > rtt_pixels.length ) {
+      rtt_pixels = null;
+      rtt_pixels = new Uint8Array(width*height*4);
+    //  px2idx = new Uint16Array(width*height*4);
+    //  pixel_weights = new Float32Array(width*height);
+    }
+    px2idx.length = width*height*4;
+    pixel_weights.length = width*height;
 
+    camera.left = width / -2;
+    camera.right = width / 2;
+    camera.top = height / 2;
+    camera.bottom = height / -2;
+    camera.updateProjectionMatrix();
+
+    rtt_target.setSize(width, height);
+    renderer.setSize(width, height);
+
+    //renderer.domElement.style.position = "absolute";
+    //renderer.domElement.style.top = "0px";
+    //renderer.domElement.style.left = "0px";
+    //renderer.domElement.style.bottom = "0px";
+    //renderer.domElement.style.right = "0px";
+    //renderer.domElement.style.transform = "translate(-50%, -50%)";
+    //renderer.domElement.style.zIndex = "-1";
+    container.appendChild(renderer.domElement);
+}
+
+function reset_image_data() {
     var canvas = createImageCanvas(width, height);
     var context = canvas.getContext("2d");
     img_data = context.getImageData(0, 0, width, height);
 
-    grad_img_data = context.createImageData(img_data);
+    grad_img_data = context.createImageData(img_data); // create empty img data
     computeGradient( img_data.data, grad_img_data.data, width, height );
-    gaussBlur(grad_img_data.data, grad_img_data.data, width, height, 5 );
+    gaussBlur(grad_img_data.data, grad_img_data.data, width, height, 3 );
     normalize(grad_img_data.data, width, height);
     context.putImageData( grad_img_data, 0, 0 );
-
-    var fov = 40,
-        aspect = width / height,
-        near = 0.1,
-        far = 100000;
-
-//    camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera = new THREE.OrthographicCamera(width / -2, width / 2,
-                                          height / 2, height / -2,
-                                          near, far);
-    //camera = new THREE.CombinedCamera(width, height, fov, near, far, near, far);
-    //camera.toOrthographic();
-    camera.position.z = 1000;
-
-    //controls = new THREE.OrbitControls( camera );
-    //controls.damping = 0.2;
-    //controls.addEventListener( 'change', render );
-
-    scene = new THREE.Scene();
-
-    rtt_target = new THREE.WebGLRenderTarget( width, height );
-    rtt_target.magFilter = THREE.NearestFilter;
-    rtt_target.minFilter = THREE.NearestFilter;
-    renderer = new THREE.WebGLRenderer( { antialias: true } );
-    renderer.setClearColor( 0, 0 );
-    renderer.setSize(width, height);
-
-    renderer.domElement.style.position = "absolute";
-    renderer.domElement.style.top = "0px";
-    renderer.domElement.style.left = "0px";
-    renderer.domElement.style.bottom = "0px";
-    renderer.domElement.style.right = "0px";
-    //renderer.domElement.style.transform = "translate(-50%, -50%)";
-    //renderer.domElement.style.zIndex = "-1";
-    container.appendChild(renderer.domElement);
     //container.appendChild(canvas);
 }
 
@@ -147,10 +166,17 @@ function reset_centroids() {
   }
 }
 
+function reset_geometry() {
+  reset_centroids();
+  for ( var i = 0; i < num_regions; ++i ) {
+    region_mesh[i].position.x = width*(Math.random() - 0.5);
+    region_mesh[i].position.y = height*(Math.random() - 0.5);
+  }
+  reset_region_colors();
+}
+
 function init_geometry() {
   // initialize voronoi region arrays
-  reset_centroids();
-
   // generate geometry to display
   var geometry = new THREE.CylinderGeometry( 0, 400, 100, 16, 1, true );
 
@@ -158,31 +184,26 @@ function init_geometry() {
     materials[i] = new THREE.MeshBasicMaterial();
   }
 
-  reset_region_colors();
-
   for ( var i = 0; i < num_regions; ++i ) {
     region_mesh[i] = new THREE.Mesh( geometry, materials[i] );
-    region_mesh[i].position.x += width*(Math.random() - 0.5);
-    region_mesh[i].position.y += height*(Math.random() - 0.5);
-    region_mesh[i].rotation.x += Math.PI/2;
+    region_mesh[i].rotation.x = Math.PI/2;
     scene.add(region_mesh[i]);
   }
+
+  reset_geometry();
 }
 
 function animate() {
+  requestAnimationFrame(animate);
   var need_to_decrement = frames_to_render > 0;
-  if (need_to_decrement || frames_to_render == -1) {
-    requestAnimationFrame(animate);
+  if (need_to_decrement || frames_to_render === -1) {
+    render_to_target();
+    paint_regions();
+    render();
+    reset_region_colors();
+    update_positions();
   }
-
   if (need_to_decrement) { frames_to_render -= 1; }
-
-  //controls.update();
-  render_to_target();
-  paint_regions();
-  render();
-  reset_region_colors();
-  update_positions();
 }
 
 function render_to_target() {
@@ -271,7 +292,6 @@ function reset_region_colors() {
     paint_colors[3*i] = 0;
     paint_colors[3*i + 1] = 0;
     paint_colors[3*i + 2] = 0;
-    //materials[i].needsUpdate = true;
   }
 }
 
@@ -383,7 +403,7 @@ function normalize(G, w, h) {
 function boxesForGauss(sigma, n)  // standard deviation, number of boxes
 {
   var wIdeal = Math.sqrt((12*sigma*sigma/n)+1);  // Ideal averaging filter width 
-  var wl = Math.floor(wIdeal);  if(wl%2==0) wl--;
+  var wl = Math.floor(wIdeal);  if(wl%2===0) wl--;
   var wu = wl+2;
 
   var mIdeal = (12*sigma*sigma - n*wl*wl - 4*n*wl - 3*n)/(-4*wl - 4);
