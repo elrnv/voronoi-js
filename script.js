@@ -7,7 +7,7 @@ var width, height;
 var rtt_target;
 var width, height;
 //var controls;
-var num_regions = 1000;
+var num_regions = 500;
 var paint_colors = new Float32Array(num_regions*3);
 var materials = new Array(num_regions);
 var img_data, grad_img_data;
@@ -42,26 +42,32 @@ function loadImage(src) {
   reader.readAsDataURL(src);
 }
 
-$(function() {
-  var target = document.getElementById('webgl-container');
-  target.addEventListener("dragover", function(e){e.preventDefault();}, true);
-  target.addEventListener("drop", function(e){
-    e.preventDefault();
-    loadImage(e.dataTransfer.files[0]);
-  }, true);
-  while (target.firstChild) { target.removeChild(target.firstChild); }
-  renderFile("/static/img/bg.jpg");
-});
+if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
+  $(function() {
+    var target = document.getElementById('webgl-container');
+    target.addEventListener("dragover", function(e){e.preventDefault();}, true);
+    target.addEventListener("drop", function(e){
+      e.preventDefault();
+      loadImage(e.dataTransfer.files[0]);
+    }, true);
+    while (target.firstChild) { target.removeChild(target.firstChild); }
+    renderFile("/static/img/bg.jpg");
+  });
+}
 
 $( window ).resize(function() {
   var temp = frames_to_render;
   frames_to_render = 0;
   var target = document.getElementById('webgl-container');
   while (target.firstChild) { target.removeChild(target.firstChild); }
-  init();
-  init_geometry();
+  if ( img ) {
+    init();
+    init_geometry();
+  }
+
   frames_to_render = temp;
-  animate();
+
+  if ( img ) { animate(); }
 });
 
 function renderFile(src) {
@@ -123,10 +129,12 @@ function init() {
     renderer.setSize(width, height);
 
     renderer.domElement.style.position = "absolute";
-    renderer.domElement.style.top = "50%";
-    renderer.domElement.style.left = "50%";
-    renderer.domElement.style.transform = "translate(-50%, -50%)";
-    renderer.domElement.style.zIndex = "-1";
+    renderer.domElement.style.top = "0px";
+    renderer.domElement.style.left = "0px";
+    renderer.domElement.style.bottom = "0px";
+    renderer.domElement.style.right = "0px";
+    //renderer.domElement.style.transform = "translate(-50%, -50%)";
+    //renderer.domElement.style.zIndex = "-1";
     container.appendChild(renderer.domElement);
     //container.appendChild(canvas);
 }
