@@ -41,13 +41,13 @@ function loadImage(src) {
 }
 
 $(function() {
-  var target = document.getElementById('banner');
+  var target = document.getElementById('webgl-container');
   target.addEventListener("dragover", function(e){e.preventDefault();}, true);
   target.addEventListener("drop", function(e){
     e.preventDefault();
     loadImage(e.dataTransfer.files[0]);
   }, true);
-  while (target.firstChild) { target.removeChild(container.firstChild); }
+  while (target.firstChild) { target.removeChild(target.firstChild); }
 });
 
 function renderFile(src) {
@@ -61,7 +61,7 @@ function renderFile(src) {
 }
 
 function init() {
-    container = document.getElementById('banner');
+    container = document.getElementById('webgl-container');
 
     width = Math.min(window.innerWidth, img.width);
     height = Math.min(window.innerHeight, img.height);
@@ -109,11 +109,14 @@ function init() {
     renderer.setClearColor( 0, 0 );
     renderer.setSize(width, height);
 
-    //renderer.domElement.style.position = "relative";
-    //renderer.domElement.style.top = "50%";
-    //renderer.domElement.style.transform = "translateY(-50%)";
-    //renderer.domElement.style.left = "50%";
-    //renderer.domElement.style.transform = "translateX(-50%)";
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.top = "0px";
+    renderer.domElement.style.left = "0px";
+    renderer.domElement.style.bottom = "0px";
+    renderer.domElement.style.right = "0px";
+    renderer.domElement.style.margin = "0px";
+    renderer.domElement.style.background-color= "#000000";
+    renderer.domElement.style.z-index = "-1";
     container.appendChild(renderer.domElement);
     //container.appendChild(canvas);
 }
