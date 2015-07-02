@@ -1,12 +1,37 @@
 body {
   margin: 0px;
+  height: 100%;
   background-color: #000000;
   overflow: hidden;
 }
 
-div#banner {
+div#wrapper {
+  position: absolute;
   margin: 0px;
-  width: 100%;
-  height 100%;
-  background-color: #000000;
+  top:0px;
+  bottom:0px;
+  left:0px;
+  right:0px;
+  background-color: #444444;
+  color: #ffffff;
+}
+
+div#drop-text div#banner {
+  position: relative;
+  top: 50%;
+  -webkit-transform: translateY(-50%);
+  -ms-transform: translateY(-50%);
+  transform: translateY(-50%);
+  left: 50%;
+  -webkit-transform: translateX(-50%);
+  -ms-transform: translateX(-50%);
+  transform: translateX(-50%);
+  color: #999999;
+}
+
+div#banner {
+  position: relative;
+  margin: 0px;
+  background-color: #333333;
+  color: #ffffff;
 }
