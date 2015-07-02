@@ -32,6 +32,9 @@ var MAX_FRAMES = 500;
 if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
   $(function() {
     // allocate needed arrays
+    container = document.getElementById('webgl-container');
+
+    if (!container) return;
 
     init();
     init_geometry();
@@ -87,7 +90,6 @@ function renderFile(src, do_animate) {
 }
 
 function init() {
-  container = document.getElementById('webgl-container');
   width = container.offsetWidth;
   height = container.offsetHeight;
 
