@@ -202,8 +202,6 @@ function animate() {
     for ( var i = 0; i < num_regions; ++i ) {
       maxpos = Math.max(maxpos, region_mesh[i].position.x);
     }
-    console.log("width = " + width);
-    console.log("maxpos= " + maxpos);
   }
   else
   {
@@ -293,9 +291,6 @@ function render_to_target() {
     paint_colors[3*i + 1] /= 255*region_pixels[i];
     paint_colors[3*i + 2] /= 255*region_pixels[i];
   }
-  //for (var i = 0; i < num_regions; ++i) {
-  //    console.log(paint_colors[1 + 3*i]);
-  //}
 }
 
 function paint_regions() {
