@@ -28,8 +28,12 @@ var frames_to_render;
 
 var MAX_FRAMES = 500;
 
+var animation_started = false;
+
 // Main point of entry
-if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
+var is_chrome = /chrom(e|ium)/.test(navigator.userAgent.toLowerCase());
+var is_firefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+if (is_chrome || is_firefox ) {
   $(function() {
     // allocate needed arrays
     container = document.getElementById('webgl-container');
@@ -39,31 +43,21 @@ if(/chrom(e|ium)/.test(navigator.userAgent.toLowerCase())) {
     init();
     init_geometry();
 
-    var target = document.getElementById('webgl-container');
-    target.addEventListener("dragover", function(e){e.preventDefault();}, true);
-    target.addEventListener("drop", function(e){
+    container.addEventListener("dragover", function(e){e.preventDefault();}, true);
+    container.addEventListener("drop", function(e){
       e.preventDefault();
       loadImage(e.dataTransfer.files[0]);
     }, true);
-    while (target.firstChild) { target.removeChild(target.firstChild); }
-    renderFile("/static/img/bg.jpg", true);
+
+    var header = document.getElementById("main-header");
+    if ( header ) {
+      style = header.currentStyle || window.getComputedStyle(header, false),
+      url = style.backgroundImage.slice(4, -1);
+      url = url.replace(/"/g,"");
+      renderFile(url);
+    }
   });
 }
-
-$( window ).resize(function() {
-  var temp = frames_to_render;
-  frames_to_render = 0;
-
-  var target = document.getElementById('webgl-container');
-  while (target.firstChild) { target.removeChild(target.firstChild); }
-  if ( img ) {
-    reset();
-    reset_geometry();
-    reset_image_data();
-  }
-
-  frames_to_render = temp;
-});
 
 function loadImage(src) {
   // Prevent any non-image file type from being read.
@@ -74,17 +68,20 @@ function loadImage(src) {
   // Create our FileReader and run the results through the renderer
   var reader = new FileReader();
   reader.onload = function(e) {
-    renderFile(e.target.result, false);
+    renderFile(e.target.result);
   };
   reader.readAsDataURL(src);
 }
 
-function renderFile(src, do_animate) {
+function renderFile(src) {
   img = new Image();
   img.onload = function() {
     reset();
     reset_image_data();
-    if (do_animate) animate();
+    if (!animation_started) {
+      animation_started = true;
+      animate();
+    }
   };
   img.src = src;
 }
@@ -113,6 +110,7 @@ function init() {
 }
 
 function reset() {
+    while (container.firstChild) { container.removeChild(container.firstChild); }
     frames_to_render = MAX_FRAMES;
 
     width = container.offsetWidth;
@@ -122,8 +120,6 @@ function reset() {
     if ( width*height*4 > rtt_pixels.length ) {
       rtt_pixels = null;
       rtt_pixels = new Uint8Array(width*height*4);
-    //  px2idx = new Uint16Array(width*height*4);
-    //  pixel_weights = new Float32Array(width*height);
     }
     px2idx.length = width*height*4;
     pixel_weights.length = width*height;
@@ -168,8 +164,10 @@ function reset_centroids() {
   }
 }
 
+//var reject_probability = 0.5;
 function reset_geometry() {
   reset_centroids();
+  //var cur_utility = 0;
   for ( var i = 0; i < num_regions; ++i ) {
     region_mesh[i].position.x = width*(Math.random() - 0.5);
     region_mesh[i].position.y = height*(Math.random() - 0.5);
@@ -196,27 +194,41 @@ function init_geometry() {
 }
 
 function animate() {
-  requestAnimationFrame(animate);
-  var need_to_decrement = frames_to_render > 0;
-  if (need_to_decrement || frames_to_render === -1) {
-    render_to_target();
-    paint_regions();
-    render();
-    reset_region_colors();
-    update_positions();
+  if ( container.offsetWidth !== width || container.offsetHeight !== height ) {
+    reset();
+    reset_geometry();
+    reset_image_data();
+    var maxpos = 0;
+    for ( var i = 0; i < num_regions; ++i ) {
+      maxpos = Math.max(maxpos, region_mesh[i].position.x);
+    }
+    console.log("width = " + width);
+    console.log("maxpos= " + maxpos);
   }
-  if (need_to_decrement) { frames_to_render -= 1; }
+  else
+  {
+    if (frames_to_render > 0 || frames_to_render === -1) {
+      render_to_target();
+      paint_regions();
+      render();
+      reset_region_colors();
+      update_positions();
+      frames_to_render -= 1;
+    }
+  }
+  requestAnimationFrame(animate);
 }
 
 function render_to_target() {
   renderer.render( scene, camera, rtt_target, true );
 
   var gl = renderer.getContext();
+  gl.finish();
   gl.readPixels( 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, rtt_pixels );
 
   for ( var y = 0; y < height; ++y ) {
     for ( var x = 0; x < width; ++x ) {
-      px2idx[x + width * y] = 0;
+      px2idx[x + width * y] = -1;
       for ( var k = 0; k < 3; ++k ) { // ignore opacity
         px2idx[x + width * y] += Math.pow(256,(2-k)) * rtt_pixels[k + 4 * (x + width * y)];
       }
@@ -233,7 +245,7 @@ function render_to_target() {
   for ( var y = 0; y < height; ++y ) {
     for ( var x = 0; x < width; ++x ) {
       var index = px2idx[x + width * y];
-      region_pixels[index] += 1;
+      if (index >= 0) region_pixels[index] += 1;
     }
   }
 
@@ -243,7 +255,10 @@ function render_to_target() {
     }
     for ( var y = 0; y < height; ++y ) {
       for ( var x = 0; x < width; ++x ) {
-        pixel_weight_sums[px2idx[x+width*y]] += pixel_weights[x + width * y];
+        var index = px2idx[x+width*y];
+        if ( index >= 0 ) {
+          pixel_weight_sums[index] += pixel_weights[x + width * y];
+        }
       }
     }
   }
@@ -251,6 +266,7 @@ function render_to_target() {
   for ( var y = 0; y < height; ++y ) {
     for ( var x = 0; x < width; ++x ) {
       var index = px2idx[x + width * y];
+      if (index < 0) continue;
       paint_colors[3*index] += img_data.data[4 * (x + width * (height - y - 1))];
       paint_colors[1 + 3*index] += img_data.data[1 + 4 * (x + width * (height - y - 1))];
       paint_colors[2 + 3*index] += img_data.data[2 + 4 * (x + width * (height - y - 1))];
@@ -290,7 +306,7 @@ function paint_regions() {
 
 function reset_region_colors() {
   for ( var i = 0; i < num_regions; ++i ) {
-    materials[i].color.setHex(i);
+    materials[i].color.setHex(i+1);
     paint_colors[3*i] = 0;
     paint_colors[3*i + 1] = 0;
     paint_colors[3*i + 2] = 0;

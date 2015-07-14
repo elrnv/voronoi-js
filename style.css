@@ -5,33 +5,19 @@ body {
   overflow: hidden;
 }
 
-div#wrapper {
+div#webgl-container{
   position: absolute;
   margin: 0px;
   top:0px;
   bottom:0px;
   left:0px;
   right:0px;
-  background-color: #444444;
-  color: #ffffff;
 }
-
-div#drop-text div#banner {
-  position: relative;
-  top: 50%;
-  -webkit-transform: translateY(-50%);
-  -ms-transform: translateY(-50%);
-  transform: translateY(-50%);
-  left: 50%;
-  -webkit-transform: translateX(-50%);
-  -ms-transform: translateX(-50%);
-  transform: translateX(-50%);
-  color: #999999;
-}
-
-div#banner {
-  position: relative;
-  margin: 0px;
-  background-color: #333333;
+p#drag-and-drop{
+  text-align: center; 
+  font-family: sans-serif;
+  font-size: 3em;
+  font-weight: bold;
   color: #ffffff;
+  z-index: -1;
 }

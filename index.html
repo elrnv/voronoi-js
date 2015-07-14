@@ -1,43 +1,15 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Test</title>
+        <title>Weighted Lloyd's Voronoi Crystallizer</title>
         <link rel='stylesheet' type='text/css' href='style.css'/>
     </head>
     <body>
-      <script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
-      <script type="x-shader/x-vertex" id="coneVert">
-        // switch on high precision floats
-        #ifdef GL_ES
-        precision highp float;
-        #endif
-
-        varying vec3 frag_color;
-
-        void main()
-        {
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
-          frag_color = color;
-        }
-      </script>
-      <script type="x-shader/x-fragment" id="coneFrag">
-        #ifdef GL_ES
-        precision highp float;
-        #endif
-
-        varying vec3 frag_color;
-
-        void main()
-        {
-          gl_FragColor  = vec4(frag_color,1.0);
-        }
-      </script>
-        <script src="three.min.js"></script>
-        <script src="OrbitControls.js"></script>
-        <script type='text/javascript' src='script.js'></script>
-        <div id="wrapper">
-          <div id="blog-banner"></div>
-          <div id="drop-text">Drop Files here</div>
-        </div>
+      <script type="text/javascript" src="jquery-2.1.4.min.js"></script>
+      <script type="text/javascript" src="three.min.js"></script>
+      <script type='text/javascript' src='script.js'></script>
+      <div id="webgl-container"><p id="drag-and-drop">
+        Drag and Drop an Image File Here and Watch it Crystallize!
+      </p></div>
     </body>
 </html>
