@@ -52,8 +52,7 @@ if (is_chrome || is_firefox ) {
     var header = document.getElementById("main-header");
     if ( header ) {
       style = header.currentStyle || window.getComputedStyle(header, false),
-      url = style.backgroundImage.slice(4, -1);
-      url = url.replace(/"/g,"");
+      url = style.backgroundImage.slice(4, -1).replace(/"/g,"");
       renderFile(url);
     }
   });
@@ -198,10 +197,6 @@ function animate() {
     reset();
     reset_geometry();
     reset_image_data();
-    var maxpos = 0;
-    for ( var i = 0; i < num_regions; ++i ) {
-      maxpos = Math.max(maxpos, region_mesh[i].position.x);
-    }
   }
   else
   {
