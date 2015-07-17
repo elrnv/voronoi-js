@@ -1,7 +1,6 @@
 // This software is licensed under the GNU GPL Version 2.
 // Originally developed by Egor Larionov
-
-var MAX_WIDTH = 200;
+var MAX_WIDTH = 100;
 var container, img;
 var camera, target_camera;
 var scene, renderer;
@@ -28,7 +27,7 @@ var pixel_weight_sums = new Float32Array(num_regions);
 
 var frames_to_render;
 
-var MAX_FRAMES = 1;
+var MAX_FRAMES = 500;
 
 var animation_started = false;
 
@@ -93,8 +92,8 @@ function init() {
   height = container.offsetHeight;
   //width = MAX_WIDTH;
   //height = Math.floor(container.offsetHeight * ( MAX_WIDTH / container.offsetWidth));
-  target_width = width;//MAX_WIDTH;
-  target_height = height;//Math.floor(height * ( target_width / width ));
+  target_width = MAX_WIDTH;
+  target_height = Math.floor(height * ( target_width / width ));
 
   var num_pixels = target_width*target_height;
   rtt_pixels = new Uint8Array(num_pixels*4);
@@ -134,8 +133,8 @@ function reset() {
     //width = MAX_WIDTH;
     //height = Math.floor( container.offsetHeight * ( MAX_WIDTH / container.offsetWidth) );
 
-    target_width = width;
-    target_height = height;//Math.floor(height * ( target_width / width ) );
+    //target_width = width;
+    target_height = Math.floor(height * ( target_width / width ) );
 
     var num_pixels = target_width*target_height;
 
@@ -259,10 +258,10 @@ function animate() {
   {
     if (frames_to_render > 0 || frames_to_render === -1) {
       render_to_target();
-      //paint_regions();
-      //render();
-      //reset_region_colors();
-      //update_positions();
+      paint_regions();
+      render();
+      reset_region_colors();
+      update_positions();
       frames_to_render -= 1;
     }
   }
@@ -270,7 +269,6 @@ function animate() {
 }
 
 function render_to_target() {
-  renderer.render( scene, camera);
   renderer.render( scene, target_camera, rtt_target, true );
 
   var gl = renderer.getContext();
@@ -296,7 +294,7 @@ function render_to_target() {
       }
     }
   }
-  console.log(px2idx);
+  //console.log(px2idx);
 
   // counting pixels in each region
 //  for ( var y = 0; y < target_height; ++y ) {
@@ -305,7 +303,7 @@ function render_to_target() {
 //      if (index >= 0) region_pixels[index] += 1;
 //    }
 //  }
-  console.log(region_pixels);
+  //console.log(region_pixels);
 
   if ( grad_img_data ) {
     for ( var i = 0; i < num_regions; ++i ) {
