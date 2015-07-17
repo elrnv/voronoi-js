@@ -1,13 +1,15 @@
 // This software is licensed under the GNU GPL Version 2.
 // Originally developed by Egor Larionov
 
+var MAX_WIDTH = 200;
 var container, img;
-var camera, scene, renderer;
+var camera, target_camera;
+var scene, renderer;
 var width, height;
 var rtt_target;
-var width, height;
+var target_width, target_height;
 //var controls;
-var num_regions = 500;
+var num_regions = 100;
 var paint_colors = new Float32Array(num_regions*3);
 var materials = new Array(num_regions);
 var img_data, grad_img_data;
@@ -26,7 +28,7 @@ var pixel_weight_sums = new Float32Array(num_regions);
 
 var frames_to_render;
 
-var MAX_FRAMES = 500;
+var MAX_FRAMES = 1;
 
 var animation_started = false;
 
@@ -76,6 +78,7 @@ function renderFile(src) {
   img = new Image();
   img.onload = function() {
     reset();
+    reset_geometry();
     reset_image_data();
     if (!animation_started) {
       animation_started = true;
@@ -88,10 +91,15 @@ function renderFile(src) {
 function init() {
   width = container.offsetWidth;
   height = container.offsetHeight;
+  //width = MAX_WIDTH;
+  //height = Math.floor(container.offsetHeight * ( MAX_WIDTH / container.offsetWidth));
+  target_width = width;//MAX_WIDTH;
+  target_height = height;//Math.floor(height * ( target_width / width ));
 
-  rtt_pixels = new Uint8Array(width*height*4);
-  px2idx = new Array(width*height*4);
-  pixel_weights = new Array(width*height);
+  var num_pixels = target_width*target_height;
+  rtt_pixels = new Uint8Array(num_pixels*4);
+  px2idx = new Array(num_pixels*4);
+  pixel_weights = new Array(num_pixels);
 
   var near = 0.1, far = 100000;
   camera = new THREE.OrthographicCamera(
@@ -99,6 +107,15 @@ function init() {
       height / 2, height / -2,
       near, far);
   camera.position.z = 1000;
+
+  target_camera = new THREE.OrthographicCamera(
+      target_width / -2, target_width / 2,
+      target_height / 2, target_height / -2,
+      near, far);
+  target_camera.position.z = 1000;
+  target_camera.scale.x = width/target_width;
+  target_camera.scale.y = height/target_height;
+  target_camera.updateMatrix();
 
   scene = new THREE.Scene();
   rtt_target = new THREE.WebGLRenderTarget();
@@ -114,14 +131,21 @@ function reset() {
 
     width = container.offsetWidth;
     height = container.offsetHeight;
+    //width = MAX_WIDTH;
+    //height = Math.floor( container.offsetHeight * ( MAX_WIDTH / container.offsetWidth) );
+
+    target_width = width;
+    target_height = height;//Math.floor(height * ( target_width / width ) );
+
+    var num_pixels = target_width*target_height;
 
     // if size has changed, we need to reallocate our arrays
-    if ( width*height*4 > rtt_pixels.length ) {
+    if ( num_pixels*4 > rtt_pixels.length ) {
       rtt_pixels = null;
-      rtt_pixels = new Uint8Array(width*height*4);
+      rtt_pixels = new Uint8Array(num_pixels*4);
     }
-    px2idx.length = width*height*4;
-    pixel_weights.length = width*height;
+    px2idx.length = num_pixels*4;
+    pixel_weights.length = num_pixels;
 
     camera.left = width / -2;
     camera.right = width / 2;
@@ -129,7 +153,16 @@ function reset() {
     camera.bottom = height / -2;
     camera.updateProjectionMatrix();
 
-    rtt_target.setSize(width, height);
+    target_camera.left = target_width / -2; // is unchanged
+    target_camera.right = target_width / 2; // is unchanged
+    target_camera.top = target_height / 2;
+    target_camera.bottom = target_height / -2;
+    target_camera.scale.x = width/target_width; // is unchanged
+    target_camera.scale.y = height/target_height;
+    target_camera.updateMatrix();
+    target_camera.updateProjectionMatrix();
+
+    rtt_target.setSize(target_width, target_height);
     renderer.setSize(width, height);
 
     //renderer.domElement.style.position = "absolute";
@@ -143,16 +176,16 @@ function reset() {
 }
 
 function reset_image_data() {
-    var canvas = createImageCanvas(width, height);
-    var context = canvas.getContext("2d");
-    img_data = context.getImageData(0, 0, width, height);
+  var canvas = createImageCanvas(target_width, target_height);
+  var context = canvas.getContext("2d");
+  img_data = context.getImageData(0, 0, target_width, target_height);
 
-    grad_img_data = context.createImageData(img_data); // create empty img data
-    computeGradient( img_data.data, grad_img_data.data, width, height );
-    gaussBlur(grad_img_data.data, grad_img_data.data, width, height, 3 );
-    normalize(grad_img_data.data, width, height);
-    context.putImageData( grad_img_data, 0, 0 );
-    //container.appendChild(canvas);
+  grad_img_data = context.createImageData( img_data ); // create empty img data
+  computeGradient( img_data.data, grad_img_data.data, target_width, target_height );
+  gaussBlur(grad_img_data.data, grad_img_data.data, target_width, target_height, 3 );
+  normalize(grad_img_data.data, target_width, target_height);
+  context.putImageData( grad_img_data, 0, 0 );
+  //container.appendChild(canvas);
 }
 
 function reset_centroids() {
@@ -163,14 +196,40 @@ function reset_centroids() {
   }
 }
 
-//var reject_probability = 0.5;
 function reset_geometry() {
   reset_centroids();
   //var cur_utility = 0;
+  console.log("maxw= " + width/2);
+  console.log("minw = " + -width/2);
+  console.log("maxh = " + height/2);
+  console.log("minh = " + -height/2);
+  //console.log("twidth = " + target_width);
+  //console.log("theight = " + target_height);
+  var maxh = -width;
+  var minh = width;
+  var maxv = -height;
+  var minv = height;
   for ( var i = 0; i < num_regions; ++i ) {
     region_mesh[i].position.x = width*(Math.random() - 0.5);
     region_mesh[i].position.y = height*(Math.random() - 0.5);
+    if ( region_mesh[i].position.y < minv ) {
+      minv = region_mesh[i].position.y;
+    }
+    if ( region_mesh[i].position.y > maxv ) {
+      maxv = region_mesh[i].position.y;
+    }
+    if ( region_mesh[i].position.x < minh ) {
+      minh = region_mesh[i].position.x;
+    }
+    if ( region_mesh[i].position.x > maxh ) {
+      maxh = region_mesh[i].position.x;
+    }
+    //region_mesh[i].updateMatrix();
   }
+  console.log("maxh = " + maxh);
+  console.log("minh = " + minh);
+  console.log("maxv = " + maxv);
+  console.log("minv = " + minv);
   reset_region_colors();
 }
 
@@ -188,8 +247,6 @@ function init_geometry() {
     region_mesh[i].rotation.x = Math.PI/2;
     scene.add(region_mesh[i]);
   }
-
-  reset_geometry();
 }
 
 function animate() {
@@ -202,10 +259,10 @@ function animate() {
   {
     if (frames_to_render > 0 || frames_to_render === -1) {
       render_to_target();
-      paint_regions();
-      render();
-      reset_region_colors();
-      update_positions();
+      //paint_regions();
+      //render();
+      //reset_region_colors();
+      //update_positions();
       frames_to_render -= 1;
     }
   }
@@ -213,59 +270,67 @@ function animate() {
 }
 
 function render_to_target() {
-  renderer.render( scene, camera, rtt_target, true );
+  renderer.render( scene, camera);
+  renderer.render( scene, target_camera, rtt_target, true );
 
   var gl = renderer.getContext();
-  gl.finish();
-  gl.readPixels( 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, rtt_pixels );
+  gl.readPixels( 0, 0, target_width, target_height, gl.RGBA, gl.UNSIGNED_BYTE, rtt_pixels );
 
-  for ( var y = 0; y < height; ++y ) {
-    for ( var x = 0; x < width; ++x ) {
-      px2idx[x + width * y] = -1;
-      for ( var k = 0; k < 3; ++k ) { // ignore opacity
-        px2idx[x + width * y] += Math.pow(256,(2-k)) * rtt_pixels[k + 4 * (x + width * y)];
-      }
+  for ( var y = 0; y < target_height; ++y ) {
+    for ( var x = 0; x < target_width; ++x ) {
+      px2idx[x + target_width * y] = 
+                      rtt_pixels[2 + 4 * (x + target_width * y)]
+              + 256 * rtt_pixels[1 + 4 * (x + target_width * y)]
+        + 256 * 256 * rtt_pixels[    4 * (x + target_width * y)] - 1;
+
+      var index = px2idx[x + target_width * y];
+      if (index >= 0) region_pixels[index] += 1;
+      
       if ( grad_img_data ) {
+        // compute pixel weights to bias Lloyd's method
         var weight = 0;
         for ( var k = 0; k < 3; ++k ) {
-          weight += grad_img_data.data[k + 4 * (x + width * (height - y - 1))];
+          weight += grad_img_data.data[k + 4 * (x + target_width * (target_height - y - 1))];
         }
-        pixel_weights[x + width * y] = weight;
+        pixel_weights[x + target_width * y] = weight;
       }
     }
   }
+  console.log(px2idx);
 
-  for ( var y = 0; y < height; ++y ) {
-    for ( var x = 0; x < width; ++x ) {
-      var index = px2idx[x + width * y];
-      if (index >= 0) region_pixels[index] += 1;
-    }
-  }
+  // counting pixels in each region
+//  for ( var y = 0; y < target_height; ++y ) {
+//    for ( var x = 0; x < target_width; ++x ) {
+//      var index = px2idx[x + target_width * y];
+//      if (index >= 0) region_pixels[index] += 1;
+//    }
+//  }
+  console.log(region_pixels);
 
   if ( grad_img_data ) {
     for ( var i = 0; i < num_regions; ++i ) {
       pixel_weight_sums[i] = 0;
     }
     for ( var y = 0; y < height; ++y ) {
-      for ( var x = 0; x < width; ++x ) {
-        var index = px2idx[x+width*y];
+      for ( var x = 0; x < target_width; ++x ) {
+        var index = px2idx[x+target_width*y];
         if ( index >= 0 ) {
-          pixel_weight_sums[index] += pixel_weights[x + width * y];
+          pixel_weight_sums[index] += pixel_weights[x + target_width * y];
         }
       }
     }
   }
 
-  for ( var y = 0; y < height; ++y ) {
-    for ( var x = 0; x < width; ++x ) {
-      var index = px2idx[x + width * y];
+  for ( var y = 0; y < target_height; ++y ) {
+    for ( var x = 0; x < target_width; ++x ) {
+      var index = px2idx[x + target_width * y];
       if (index < 0) continue;
-      paint_colors[3*index] += img_data.data[4 * (x + width * (height - y - 1))];
-      paint_colors[1 + 3*index] += img_data.data[1 + 4 * (x + width * (height - y - 1))];
-      paint_colors[2 + 3*index] += img_data.data[2 + 4 * (x + width * (height - y - 1))];
+      paint_colors[3*index]     += img_data.data[4 * (x + target_width * (target_height - y - 1))];
+      paint_colors[1 + 3*index] += img_data.data[1 + 4 * (x + target_width * (target_height - y - 1))];
+      paint_colors[2 + 3*index] += img_data.data[2 + 4 * (x + target_width * (target_height - y - 1))];
       var weight = 1;
       if (grad_img_data) {
-       weight = pixel_weights[x + width*y];
+       weight = pixel_weights[x + target_width*y];
       }
       centroids[2*index] += x*weight;
       centroids[2*index+1] += y*weight;
@@ -296,7 +361,7 @@ function paint_regions() {
 
 function reset_region_colors() {
   for ( var i = 0; i < num_regions; ++i ) {
-    materials[i].color.setHex(i+1);
+    materials[i].color.setHex(i+1); // ignore the black region
     paint_colors[3*i] = 0;
     paint_colors[3*i + 1] = 0;
     paint_colors[3*i + 2] = 0;
@@ -305,8 +370,8 @@ function reset_region_colors() {
 
 function update_positions() {
   for (var i = 0; i < num_regions; ++i) {
-    region_mesh[i].position.x = centroids[2*i] - 0.5*width + 0.5;
-    region_mesh[i].position.y = centroids[2*i+1] - 0.5*height + 0.5;
+    region_mesh[i].position.x = (width/target_width)*(centroids[2*i] - 0.5*target_width + 0.5);
+    region_mesh[i].position.y = (height/target_height)*(centroids[2*i+1] - 0.5*target_height + 0.5);
   }
 
   reset_centroids();
@@ -316,17 +381,19 @@ function render() {
   renderer.render( scene, camera );
 }
 
-function createImageCanvas(width, height) {
+function createImageCanvas(w, h) {
     var canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = w;
+    canvas.height = h;
     var context = canvas.getContext('2d');
 
+    // draw image in the center
     var hRatio = canvas.width / img.width;
     var vRatio = canvas.height / img.height;
     var ratio  = Math.max( hRatio, vRatio );
-    context.drawImage(img,0,0,img.width,img.height, 
-                    (width - img.width*ratio)/2, (height-img.height*ratio)/2,img.width*ratio, img.height*ratio);
+    context.drawImage(img,
+                    (w - img.width*ratio)/2, (h - img.height*ratio)/2,
+                    img.width*ratio, img.height*ratio);
     return canvas;
 }
 
