@@ -20,6 +20,7 @@
 var rc = {
   'max_width': 300,
   'num_regions': 2000,
+  'num_iterations': 500,
 };
 
 var container, img;
@@ -28,26 +29,28 @@ var scene, renderer;
 var width, height;
 var rtt_target;
 var target_width, target_height;
-var paint_colors = new Float32Array(rc.num_regions*3);
-var materials = new Array(rc.num_regions);
+var paint_colors;
+var materials;
 var img_data, grad_img_data;
 
+// Cone geometry used to draw the regions
+var cone_geometry;
+
 // centroids of each voronoi region
-var centroids = new Float32Array(rc.num_regions*2);
+var centroids;
 // number of pixels in a voronoi region
-var region_pixels = new Uint16Array(rc.num_regions);
+var region_pixels;
 // cones geometry representing voronoi regions
-var region_mesh = new Array(rc.num_regions);
+var region_mesh;
 
 var rtt_pixels;
 var px2idx;
 var pixel_weights;
-var pixel_weight_sums = new Float32Array(rc.num_regions);
+var pixel_weight_sums;
 
 var frames_to_render;
 
-var MAX_FRAMES = 500;
-
+var gui_changed = false;
 var animation_started = false;
 
 // Main point of entry
@@ -61,10 +64,11 @@ if (is_chrome || is_firefox ) {
     if (!container) return;
 
     init();
-    init_geometry();
+    init_geometry(0);
+    initGUI();
 
     container.addEventListener("dragover", function(e){e.preventDefault();}, true);
-    container.addEventListener("drop", function(e){
+    container.addEventListener("drop", function(e) {
       e.preventDefault();
       loadImage(e.dataTransfer.files[0]);
     }, true);
@@ -78,16 +82,16 @@ if (is_chrome || is_firefox ) {
   });
 }
 
-//function guiChanged() {
-//  reset();
-//}
-//
-//function initGUI() {
-//  var gui = new dat.GUI();
-//  gui.add(resolution_controller, 'image width', 10, 1000, 10 ).onChange( guiChanged );
-//  gui.add(resolution_controller, '# of regions', 50, 20000, 10).onChange( guiChanged );
-//  guiChanged();
-//};
+function guiChanged() {
+  gui_changed = true;
+}
+
+function initGUI() {
+  var gui = new dat.GUI();
+  gui.add(rc, 'max_width',  10, 1000).step(10).onChange( guiChanged );
+  gui.add(rc, 'num_regions', 50, 10000).step(10).onChange( guiChanged );
+  gui.add(rc, 'num_iterations', 0, 10000).step(10).onChange( guiChanged );
+};
 
 function loadImage(src) {
   // Prevent any non-image file type from being read.
@@ -117,11 +121,23 @@ function renderFile(src) {
   img.src = src;
 }
 
-function init() {
+function reset_resolution() {
   width = container.offsetWidth;
   height = container.offsetHeight;
   target_width = rc.max_width;
   target_height = Math.floor(height * ( target_width / width ));
+}
+
+function init() {
+  reset_resolution();
+
+  cone_geometry = new THREE.CylinderGeometry( 0, 400, 100, 16, 1, true );
+  paint_colors = new Float32Array(rc.num_regions*3);
+  materials = new Array(rc.num_regions);
+  centroids = new Float32Array(rc.num_regions*2);
+  region_pixels = new Uint16Array(rc.num_regions);
+  region_mesh = new Array(rc.num_regions);
+  pixel_weight_sums = new Float32Array(rc.num_regions);
 
   var num_pixels = target_width*target_height;
   rtt_pixels = new Uint8Array(num_pixels*4);
@@ -154,12 +170,19 @@ function init() {
 
 function reset() {
   while (container.firstChild) { container.removeChild(container.firstChild); }
-  frames_to_render = MAX_FRAMES;
+  frames_to_render = rc.num_iterations;
 
-  width = container.offsetWidth;
-  height = container.offsetHeight;
+  reset_resolution();
 
-  target_height = Math.floor(height * ( target_width / width ) );
+  // if we need more space, allocate more space
+  if (region_mesh.length < rc.num_regions) {
+    paint_colors = new Float32Array(rc.num_regions*3);
+    materials.length = rc.num_regions;
+    centroids = new Float32Array(rc.num_regions*2);
+    region_pixels = new Uint16Array(rc.num_regions);
+    region_mesh.length = rc.num_regions;
+    pixel_weight_sums = new Float32Array(rc.num_regions);
+  }
 
   var num_pixels = target_width*target_height;
 
@@ -177,11 +200,11 @@ function reset() {
   camera.bottom = height / -2;
   camera.updateProjectionMatrix();
 
-  target_camera.left = target_width / -2; // is unchanged
-  target_camera.right = target_width / 2; // is unchanged
+  target_camera.left = target_width / -2;
+  target_camera.right = target_width / 2;
   target_camera.top = target_height / 2;
   target_camera.bottom = target_height / -2;
-  target_camera.scale.x = width/target_width; // is unchanged
+  target_camera.scale.x = width/target_width;
   target_camera.scale.y = height/target_height;
   target_camera.updateMatrix();
   target_camera.updateProjectionMatrix();
@@ -224,24 +247,37 @@ function reset_geometry() {
   reset_region_colors();
 }
 
-function init_geometry() {
-  // initialize voronoi region arrays
-  // generate geometry to display
-  var geometry = new THREE.CylinderGeometry( 0, 400, 100, 16, 1, true );
-
+function reset_scene() {
+  scene = new THREE.Scene();
   for ( var i = 0; i < rc.num_regions; ++i ) {
+    scene.add(region_mesh[i]);
+  }
+}
+
+function init_geometry(start) {
+  // initialize voronoi region arrays
+  for ( var i = start; i < rc.num_regions; ++i ) {
     materials[i] = new THREE.MeshBasicMaterial();
   }
 
-  for ( var i = 0; i < rc.num_regions; ++i ) {
-    region_mesh[i] = new THREE.Mesh( geometry, materials[i] );
+  for ( var i = start; i < rc.num_regions; ++i ) {
+    region_mesh[i] = new THREE.Mesh( cone_geometry, materials[i] );
     region_mesh[i].rotation.x = Math.PI/2;
     scene.add(region_mesh[i]);
   }
 }
 
 function animate() {
-  if ( container.offsetWidth !== width || container.offsetHeight !== height ) {
+  if ( gui_changed ) {
+    var orig_num_regions = region_mesh.length;
+    reset();
+    if ( orig_num_regions < rc.num_regions ) init_geometry(orig_num_regions);
+    else if ( orig_num_regions > rc.num_regions ) reset_scene();
+    reset_geometry();
+    reset_image_data();
+    gui_changed = false;
+  }
+  else if ( container.offsetWidth !== width || container.offsetHeight !== height ) {
     reset();
     reset_geometry();
     reset_image_data();
