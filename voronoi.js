@@ -1,29 +1,48 @@
-// This software is licensed under the GNU GPL Version 2.
-// Originally developed by Egor Larionov
-var MAX_WIDTH = 100;
+/**
+ * voronoi-js JavaScript Weighted Lloyd's Method
+ * https://github.com/elrnv/voronoi-js
+ *
+ * Copyright 2015 Egor Larionov
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+var rc = {
+  'max_width': 300,
+  'num_regions': 2000,
+};
+
 var container, img;
 var camera, target_camera;
 var scene, renderer;
 var width, height;
 var rtt_target;
 var target_width, target_height;
-//var controls;
-var num_regions = 100;
-var paint_colors = new Float32Array(num_regions*3);
-var materials = new Array(num_regions);
+var paint_colors = new Float32Array(rc.num_regions*3);
+var materials = new Array(rc.num_regions);
 var img_data, grad_img_data;
 
 // centroids of each voronoi region
-var centroids = new Float32Array(num_regions*2);
+var centroids = new Float32Array(rc.num_regions*2);
 // number of pixels in a voronoi region
-var region_pixels = new Uint16Array(num_regions);
+var region_pixels = new Uint16Array(rc.num_regions);
 // cones geometry representing voronoi regions
-var region_mesh = new Array(num_regions);
+var region_mesh = new Array(rc.num_regions);
 
 var rtt_pixels;
 var px2idx;
 var pixel_weights;
-var pixel_weight_sums = new Float32Array(num_regions);
+var pixel_weight_sums = new Float32Array(rc.num_regions);
 
 var frames_to_render;
 
@@ -59,6 +78,17 @@ if (is_chrome || is_firefox ) {
   });
 }
 
+//function guiChanged() {
+//  reset();
+//}
+//
+//function initGUI() {
+//  var gui = new dat.GUI();
+//  gui.add(resolution_controller, 'image width', 10, 1000, 10 ).onChange( guiChanged );
+//  gui.add(resolution_controller, '# of regions', 50, 20000, 10).onChange( guiChanged );
+//  guiChanged();
+//};
+
 function loadImage(src) {
   // Prevent any non-image file type from being read.
   if (!src.type.match(/image.*/)) {
@@ -90,9 +120,7 @@ function renderFile(src) {
 function init() {
   width = container.offsetWidth;
   height = container.offsetHeight;
-  //width = MAX_WIDTH;
-  //height = Math.floor(container.offsetHeight * ( MAX_WIDTH / container.offsetWidth));
-  target_width = MAX_WIDTH;
+  target_width = rc.max_width;
   target_height = Math.floor(height * ( target_width / width ));
 
   var num_pixels = target_width*target_height;
@@ -117,61 +145,52 @@ function init() {
   target_camera.updateMatrix();
 
   scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer( { antialias: true } );
+  renderer.setClearColor( 0, 0 );
   rtt_target = new THREE.WebGLRenderTarget();
   rtt_target.magFilter = THREE.NearestFilter;
   rtt_target.minFilter = THREE.NearestFilter;
-  renderer = new THREE.WebGLRenderer( { antialias: true } );
-  renderer.setClearColor( 0, 0 );
 }
 
 function reset() {
-    while (container.firstChild) { container.removeChild(container.firstChild); }
-    frames_to_render = MAX_FRAMES;
+  while (container.firstChild) { container.removeChild(container.firstChild); }
+  frames_to_render = MAX_FRAMES;
 
-    width = container.offsetWidth;
-    height = container.offsetHeight;
-    //width = MAX_WIDTH;
-    //height = Math.floor( container.offsetHeight * ( MAX_WIDTH / container.offsetWidth) );
+  width = container.offsetWidth;
+  height = container.offsetHeight;
 
-    //target_width = width;
-    target_height = Math.floor(height * ( target_width / width ) );
+  target_height = Math.floor(height * ( target_width / width ) );
 
-    var num_pixels = target_width*target_height;
+  var num_pixels = target_width*target_height;
 
-    // if size has changed, we need to reallocate our arrays
-    if ( num_pixels*4 > rtt_pixels.length ) {
-      rtt_pixels = null;
-      rtt_pixels = new Uint8Array(num_pixels*4);
-    }
-    px2idx.length = num_pixels*4;
-    pixel_weights.length = num_pixels;
+  // if size has changed, we need to reallocate our arrays
+  if ( num_pixels*4 > rtt_pixels.length ) {
+    rtt_pixels = null;
+    rtt_pixels = new Uint8Array(num_pixels*4);
+  }
+  px2idx.length = num_pixels*4;
+  pixel_weights.length = num_pixels;
 
-    camera.left = width / -2;
-    camera.right = width / 2;
-    camera.top = height / 2;
-    camera.bottom = height / -2;
-    camera.updateProjectionMatrix();
+  camera.left = width / -2;
+  camera.right = width / 2;
+  camera.top = height / 2;
+  camera.bottom = height / -2;
+  camera.updateProjectionMatrix();
 
-    target_camera.left = target_width / -2; // is unchanged
-    target_camera.right = target_width / 2; // is unchanged
-    target_camera.top = target_height / 2;
-    target_camera.bottom = target_height / -2;
-    target_camera.scale.x = width/target_width; // is unchanged
-    target_camera.scale.y = height/target_height;
-    target_camera.updateMatrix();
-    target_camera.updateProjectionMatrix();
+  target_camera.left = target_width / -2; // is unchanged
+  target_camera.right = target_width / 2; // is unchanged
+  target_camera.top = target_height / 2;
+  target_camera.bottom = target_height / -2;
+  target_camera.scale.x = width/target_width; // is unchanged
+  target_camera.scale.y = height/target_height;
+  target_camera.updateMatrix();
+  target_camera.updateProjectionMatrix();
 
-    rtt_target.setSize(target_width, target_height);
-    renderer.setSize(width, height);
+  rtt_target.dispose();
+  rtt_target.setSize(target_width, target_height);
+  renderer.setSize(width, height);
 
-    //renderer.domElement.style.position = "absolute";
-    //renderer.domElement.style.top = "0px";
-    //renderer.domElement.style.left = "0px";
-    //renderer.domElement.style.bottom = "0px";
-    //renderer.domElement.style.right = "0px";
-    //renderer.domElement.style.transform = "translate(-50%, -50%)";
-    //renderer.domElement.style.zIndex = "-1";
-    container.appendChild(renderer.domElement);
+  container.appendChild(renderer.domElement);
 }
 
 function reset_image_data() {
@@ -188,47 +207,20 @@ function reset_image_data() {
 }
 
 function reset_centroids() {
-  for (var i = 0; i < num_regions; ++i) {
+  for (var i = 0; i < rc.num_regions; ++i) {
     centroids[2*i] = 0;
     centroids[2*i+1] = 0;
     region_pixels[i] = 0;
+    pixel_weight_sums[i] = 0;
   }
 }
 
 function reset_geometry() {
   reset_centroids();
-  //var cur_utility = 0;
-  console.log("maxw= " + width/2);
-  console.log("minw = " + -width/2);
-  console.log("maxh = " + height/2);
-  console.log("minh = " + -height/2);
-  //console.log("twidth = " + target_width);
-  //console.log("theight = " + target_height);
-  var maxh = -width;
-  var minh = width;
-  var maxv = -height;
-  var minv = height;
-  for ( var i = 0; i < num_regions; ++i ) {
+  for ( var i = 0; i < rc.num_regions; ++i ) {
     region_mesh[i].position.x = width*(Math.random() - 0.5);
     region_mesh[i].position.y = height*(Math.random() - 0.5);
-    if ( region_mesh[i].position.y < minv ) {
-      minv = region_mesh[i].position.y;
-    }
-    if ( region_mesh[i].position.y > maxv ) {
-      maxv = region_mesh[i].position.y;
-    }
-    if ( region_mesh[i].position.x < minh ) {
-      minh = region_mesh[i].position.x;
-    }
-    if ( region_mesh[i].position.x > maxh ) {
-      maxh = region_mesh[i].position.x;
-    }
-    //region_mesh[i].updateMatrix();
   }
-  console.log("maxh = " + maxh);
-  console.log("minh = " + minh);
-  console.log("maxv = " + maxv);
-  console.log("minv = " + minv);
   reset_region_colors();
 }
 
@@ -237,11 +229,11 @@ function init_geometry() {
   // generate geometry to display
   var geometry = new THREE.CylinderGeometry( 0, 400, 100, 16, 1, true );
 
-  for ( var i = 0; i < num_regions; ++i ) {
+  for ( var i = 0; i < rc.num_regions; ++i ) {
     materials[i] = new THREE.MeshBasicMaterial();
   }
 
-  for ( var i = 0; i < num_regions; ++i ) {
+  for ( var i = 0; i < rc.num_regions; ++i ) {
     region_mesh[i] = new THREE.Mesh( geometry, materials[i] );
     region_mesh[i].rotation.x = Math.PI/2;
     scene.add(region_mesh[i]);
@@ -272,18 +264,19 @@ function render_to_target() {
   renderer.render( scene, target_camera, rtt_target, true );
 
   var gl = renderer.getContext();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, rtt_target.__webglFramebuffer);
   gl.readPixels( 0, 0, target_width, target_height, gl.RGBA, gl.UNSIGNED_BYTE, rtt_pixels );
 
   for ( var y = 0; y < target_height; ++y ) {
     for ( var x = 0; x < target_width; ++x ) {
-      px2idx[x + target_width * y] = 
-                      rtt_pixels[2 + 4 * (x + target_width * y)]
+      var index =     rtt_pixels[2 + 4 * (x + target_width * y)]
               + 256 * rtt_pixels[1 + 4 * (x + target_width * y)]
         + 256 * 256 * rtt_pixels[    4 * (x + target_width * y)] - 1;
 
-      var index = px2idx[x + target_width * y];
       if (index >= 0) region_pixels[index] += 1;
       
+      px2idx[x + target_width * y] = index;
+
       if ( grad_img_data ) {
         // compute pixel weights to bias Lloyd's method
         var weight = 0;
@@ -294,22 +287,9 @@ function render_to_target() {
       }
     }
   }
-  //console.log(px2idx);
-
-  // counting pixels in each region
-//  for ( var y = 0; y < target_height; ++y ) {
-//    for ( var x = 0; x < target_width; ++x ) {
-//      var index = px2idx[x + target_width * y];
-//      if (index >= 0) region_pixels[index] += 1;
-//    }
-//  }
-  //console.log(region_pixels);
 
   if ( grad_img_data ) {
-    for ( var i = 0; i < num_regions; ++i ) {
-      pixel_weight_sums[i] = 0;
-    }
-    for ( var y = 0; y < height; ++y ) {
+    for ( var y = 0; y < target_height; ++y ) {
       for ( var x = 0; x < target_width; ++x ) {
         var index = px2idx[x+target_width*y];
         if ( index >= 0 ) {
@@ -328,14 +308,14 @@ function render_to_target() {
       paint_colors[2 + 3*index] += img_data.data[2 + 4 * (x + target_width * (target_height - y - 1))];
       var weight = 1;
       if (grad_img_data) {
-       weight = pixel_weights[x + target_width*y];
+        weight = pixel_weights[x + target_width*y];
       }
       centroids[2*index] += x*weight;
       centroids[2*index+1] += y*weight;
     }
   }
 
-  for (var i = 0; i < num_regions; ++i) {
+  for (var i = 0; i < rc.num_regions; ++i) {
     if ( grad_img_data ) {
       centroids[2*i] /= pixel_weight_sums[i];
       centroids[2*i+1] /= pixel_weight_sums[i];
@@ -352,13 +332,13 @@ function render_to_target() {
 }
 
 function paint_regions() {
-  for ( var i = 0; i < num_regions; ++i ) {
+  for ( var i = 0; i < rc.num_regions; ++i ) {
     materials[i].color.setRGB(paint_colors[3*i],paint_colors[3*i+1],paint_colors[3*i+2]);
   }
 }
 
 function reset_region_colors() {
-  for ( var i = 0; i < num_regions; ++i ) {
+  for ( var i = 0; i < rc.num_regions; ++i ) {
     materials[i].color.setHex(i+1); // ignore the black region
     paint_colors[3*i] = 0;
     paint_colors[3*i + 1] = 0;
@@ -367,7 +347,7 @@ function reset_region_colors() {
 }
 
 function update_positions() {
-  for (var i = 0; i < num_regions; ++i) {
+  for (var i = 0; i < rc.num_regions; ++i) {
     region_mesh[i].position.x = (width/target_width)*(centroids[2*i] - 0.5*target_width + 0.5);
     region_mesh[i].position.y = (height/target_height)*(centroids[2*i+1] - 0.5*target_height + 0.5);
   }
@@ -468,7 +448,6 @@ function normalize(G, w, h) {
       G[2+idx(x,y)] *= 255/(max-min);
     }
   }
-
 }
 
 // Gaussian blur
