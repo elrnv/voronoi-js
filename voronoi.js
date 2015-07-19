@@ -18,11 +18,14 @@
  */
 
 var rc = {
-  'max_width': 300,
+  'pixels_per_region': 20,
   'num_regions': 2000,
-  'num_iterations': 500,
+  'num_frames': 500,
+  'weighted': true,
+  'weight_radius': 5,
 };
 
+var max_width;
 var container, img;
 var camera, target_camera;
 var scene, renderer;
@@ -87,10 +90,13 @@ function guiChanged() {
 }
 
 function initGUI() {
-  var gui = new dat.GUI();
-  gui.add(rc, 'max_width',  10, 1000).step(10).onChange( guiChanged );
-  gui.add(rc, 'num_regions', 50, 10000).step(10).onChange( guiChanged );
-  gui.add(rc, 'num_iterations', 0, 10000).step(10).onChange( guiChanged );
+  var gui = new dat.GUI({width: 300});
+  gui.close();
+  gui.add(rc, 'pixels_per_region',  1, 50).step(1).onChange( guiChanged );
+  gui.add(rc, 'num_regions', 50, 20000).step(10).onChange( guiChanged );
+  gui.add(rc, 'num_frames', 0, 10000).step(10).onChange( guiChanged );
+  gui.add(rc, 'weighted').onChange( guiChanged );
+  gui.add(rc, 'weight_radius', 0, 100).step(1).onChange( guiChanged );
 };
 
 function loadImage(src) {
@@ -122,6 +128,7 @@ function renderFile(src) {
 }
 
 function reset_resolution() {
+  rc.max_width = Math.floor(Math.sqrt(rc.num_regions*rc.pixels_per_region));
   width = container.offsetWidth;
   height = container.offsetHeight;
   target_width = rc.max_width;
@@ -170,7 +177,7 @@ function init() {
 
 function reset() {
   while (container.firstChild) { container.removeChild(container.firstChild); }
-  frames_to_render = rc.num_iterations;
+  frames_to_render = rc.num_frames;
 
   reset_resolution();
 
@@ -221,11 +228,16 @@ function reset_image_data() {
   var context = canvas.getContext("2d");
   img_data = context.getImageData(0, 0, target_width, target_height);
 
-  grad_img_data = context.createImageData( img_data ); // create empty img data
-  computeGradient( img_data.data, grad_img_data.data, target_width, target_height );
-  gaussBlur(grad_img_data.data, grad_img_data.data, target_width, target_height, 3 );
-  normalize(grad_img_data.data, target_width, target_height);
-  context.putImageData( grad_img_data, 0, 0 );
+  if (rc.weighted) {
+    grad_img_data = context.createImageData( img_data ); // create empty img data
+    computeGradient( img_data.data, grad_img_data.data, target_width, target_height );
+    gaussBlur(grad_img_data.data, grad_img_data.data, target_width, target_height, rc.weight_radius );
+    normalize(grad_img_data.data, target_width, target_height);
+    context.putImageData( grad_img_data, 0, 0 );
+  }
+  else {
+    grad_img_data = null;
+  }
   //container.appendChild(canvas);
 }
 
